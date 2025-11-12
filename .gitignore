@@ -1,0 +1,31 @@
+﻿# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Bb]uild/
+[Bb]uilds/
+obj/
+UserSettings/
+# Visual Studio / Rider / OS
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+# Other
+MemoryCaptures/
+# Audio assets larger than 100MB should be handled with Git LFS
+*.wav
+*.mp3
