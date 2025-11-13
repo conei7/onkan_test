@@ -1,4 +1,4 @@
-﻿# Unity generated folders
+# Unity generated folders
 [Ll]ibrary/
 [Tt]emp/
 [Bb]uild/
@@ -28,4 +28,3 @@ Thumbs.db
 MemoryCaptures/
 # Audio assets larger than 100MB should be handled with Git LFS
 *.wav
-*.mp3
