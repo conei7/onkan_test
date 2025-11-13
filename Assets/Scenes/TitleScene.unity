@@ -154,8 +154,18 @@ MonoBehaviour:
   noteSource: {fileID: 1828979886}
   sfxSource: {fileID: 1716910765}
   noteClips:
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 8300000, guid: 6dd9afe80ed5fab43a0b2b9c2b2212fb, type: 3}
+  - {fileID: 8300000, guid: 81e846fc0f1402b458aa20b5e4a912e2, type: 3}
+  - {fileID: 8300000, guid: 143172a7fff84dc47b992071c3683b6f, type: 3}
+  - {fileID: 8300000, guid: 9cfceee63b78ec8459c1877339dc2fe9, type: 3}
+  - {fileID: 8300000, guid: d4a183c14f4b7434eb94be1c462cd3ff, type: 3}
+  - {fileID: 8300000, guid: 1eb58ecbf9876bd47a7150320c77af7f, type: 3}
+  - {fileID: 8300000, guid: bd0c91bdc72a98d4aaae1f038e59b807, type: 3}
+  - {fileID: 8300000, guid: d5708eebb233e774b8210c012f0d90b1, type: 3}
+  - {fileID: 8300000, guid: 4eab607fe30c65d479e90d24e9533c87, type: 3}
+  - {fileID: 8300000, guid: 0624fb6af1ce8b44eafb8f0fd8105499, type: 3}
+  - {fileID: 8300000, guid: ac7b3689bf11c0447827b7a7d3b8f078, type: 3}
+  - {fileID: 8300000, guid: 865f4b544c5606244ad3e0b81ee6ef9a, type: 3}
 --- !u!4 &220324868
 Transform:
   m_ObjectHideFlags: 0
@@ -424,7 +434,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'onkan test
+  m_text: 'test
 
 '
   m_isRightToLeft: 0
