@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -10,8 +11,7 @@ namespace AbsolutePitchGame
         private enum GamePhase
         {
             AwaitingPlayback,
-            AwaitingAnswer,
-            ShowingFeedback
+            AwaitingAnswer
         }
 
         private static readonly string[] NoteNames =
@@ -35,34 +35,67 @@ namespace AbsolutePitchGame
         [SerializeField] private TMP_Text scoreText;
         [SerializeField] private List<KeyboardButtonUI> noteButtons = new();
 
-        [Header("Gameplay Settings")]
-        [SerializeField] private float correctDelay = 1.5f;
-        [SerializeField] private float incorrectDelay = 2.0f;
-        [SerializeField] private bool repeatUntilCorrect = true;
-        [SerializeField] private bool autoReplayAfterMiss = false;
+    [Header("Gameplay Settings")]
+    [SerializeField] private float nextQuestionDelay = 1.0f;
+    [SerializeField] private float sessionDuration = 30.0f;
 
-        private int correctNoteIndex;
-        private int score;
-        private GamePhase currentPhase = GamePhase.AwaitingPlayback;
-        private Coroutine feedbackRoutine;
+    private int correctNoteIndex;
+    private int totalQuestions;
+    private int correctAnswers;
+    private GamePhase currentPhase = GamePhase.AwaitingPlayback;
+    private Coroutine autoAdvanceRoutine;
+    private Coroutine sessionCountdownRoutine;
+    private float remainingTime;
+    private bool sessionActive;
 
         private void Start()
         {
+            // If inspector list was not populated, try to auto-discover KeyboardButtonUI in the scene
+            if (noteButtons == null || noteButtons.Count == 0)
+            {
+                var found = FindObjectsOfType<KeyboardButtonUI>();
+                if (found != null && found.Length > 0)
+                {
+                    // Sort by GameObject name to get deterministic order if developer named them consistently
+                    var ordered = found.OrderBy(f => f.gameObject.name).ToList();
+                    noteButtons = ordered;
+                    Debug.Log($"GameSceneManager: auto-discovered {ordered.Count} KeyboardButtonUI objects and assigned to noteButtons.");
+                }
+                else
+                {
+                    Debug.LogWarning("GameSceneManager: no KeyboardButtonUI found in scene. Please assign noteButtons in inspector.");
+                }
+            }
+
             RegisterButtons();
-            PrepareNextQuestion(true);
+            StartSession();
         }
 
         private void OnDisable()
         {
-            if (feedbackRoutine != null)
+            if (autoAdvanceRoutine != null)
             {
-                StopCoroutine(feedbackRoutine);
-                feedbackRoutine = null;
+                StopCoroutine(autoAdvanceRoutine);
+                autoAdvanceRoutine = null;
+            }
+
+            if (sessionCountdownRoutine != null)
+            {
+                StopCoroutine(sessionCountdownRoutine);
+                sessionCountdownRoutine = null;
             }
         }
 
         public void HandlePlayNoteRequest()
         {
+            if (!sessionActive)
+            {
+                return;
+            }
+
+#if UNITY_EDITOR
+            Debug.Log($"HandlePlayNoteRequest called - phase={currentPhase} correctNoteIndex={correctNoteIndex}");
+#endif
             PlayCurrentNote();
 
             if (currentPhase == GamePhase.AwaitingPlayback)
@@ -74,6 +107,14 @@ namespace AbsolutePitchGame
 
         public void SubmitAnswer(int noteIndex)
         {
+#if UNITY_EDITOR
+            Debug.Log($"SubmitAnswer called - noteIndex={noteIndex} phase={currentPhase} correctNoteIndex={correctNoteIndex}");
+#endif
+            if (!sessionActive)
+            {
+                return;
+            }
+
             if (currentPhase != GamePhase.AwaitingAnswer)
             {
                 return;
@@ -81,7 +122,15 @@ namespace AbsolutePitchGame
 
             SetButtonsInteractable(false);
 
-            if (noteIndex == correctNoteIndex)
+            totalQuestions++;
+            var isCorrect = noteIndex == correctNoteIndex;
+            if (isCorrect)
+            {
+                correctAnswers++;
+            }
+            UpdateScore();
+
+            if (isCorrect)
             {
                 HandleCorrectAnswer();
             }
@@ -110,7 +159,7 @@ namespace AbsolutePitchGame
             }
         }
 
-        private void PrepareNextQuestion(bool pickNewNote)
+        private void PrepareNextQuestion(bool pickNewNote, bool updatePrompt = true)
         {
             if (pickNewNote)
             {
@@ -119,7 +168,10 @@ namespace AbsolutePitchGame
 
             currentPhase = GamePhase.AwaitingPlayback;
             SetButtonsInteractable(false);
-            UpdateFeedback("音を再生して、鍵盤を押してください");
+            if (updatePrompt)
+            {
+                UpdateFeedback("Listen and choose a note");
+            }
         }
 
         private void PlayCurrentNote()
@@ -135,54 +187,87 @@ namespace AbsolutePitchGame
 
         private void HandleCorrectAnswer()
         {
-            currentPhase = GamePhase.ShowingFeedback;
-            score++;
-            UpdateScore();
-            UpdateFeedback("正解！");
-            RestartRoutine(AdvanceRoutine(correctDelay, true));
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.StopNotePlayback();
+            }
+
+            UpdateFeedback("Correct! Next note is coming...");
+            ScheduleNextQuestion(true);
         }
 
         private void HandleIncorrectAnswer()
         {
-            currentPhase = GamePhase.ShowingFeedback;
-            UpdateFeedback($"残念！正解は『{NoteNames[correctNoteIndex]}』でした");
-
-            if (repeatUntilCorrect)
+            if (AudioManager.Instance != null)
             {
-                RestartRoutine(RepeatSameQuestionRoutine());
-                return;
+                AudioManager.Instance.StopNotePlayback();
             }
 
-            RestartRoutine(AdvanceRoutine(incorrectDelay, true));
+            UpdateFeedback($"Almost! The answer was {NoteNames[correctNoteIndex]}. Next note is coming...");
+            ScheduleNextQuestion(true);
         }
 
-        private IEnumerator RepeatSameQuestionRoutine()
+        private void ScheduleNextQuestion(bool pickNewNote)
         {
-            yield return new WaitForSeconds(incorrectDelay);
-
-            if (autoReplayAfterMiss)
+            if (autoAdvanceRoutine != null)
             {
-                PlayCurrentNote();
+                StopCoroutine(autoAdvanceRoutine);
             }
 
-            currentPhase = GamePhase.AwaitingAnswer;
-            SetButtonsInteractable(true);
+            autoAdvanceRoutine = StartCoroutine(AutoAdvanceRoutine(pickNewNote));
         }
 
-        private IEnumerator AdvanceRoutine(float waitTime, bool pickNewNote)
+        private IEnumerator AutoAdvanceRoutine(bool pickNewNote)
         {
-            yield return new WaitForSeconds(waitTime);
+            yield return new WaitForSeconds(nextQuestionDelay);
+            autoAdvanceRoutine = null;
             PrepareNextQuestion(pickNewNote);
+            HandlePlayNoteRequest();
         }
 
-        private void RestartRoutine(IEnumerator routine)
+        private void StartSession()
         {
-            if (feedbackRoutine != null)
+            remainingTime = sessionDuration;
+            sessionActive = true;
+            totalQuestions = 0;
+            correctAnswers = 0;
+            UpdateScore();
+
+            if (sessionCountdownRoutine != null)
             {
-                StopCoroutine(feedbackRoutine);
+                StopCoroutine(sessionCountdownRoutine);
             }
 
-            feedbackRoutine = StartCoroutine(routine);
+            sessionCountdownRoutine = StartCoroutine(SessionCountdownRoutine());
+            PrepareNextQuestion(true);
+        }
+
+        private IEnumerator SessionCountdownRoutine()
+        {
+            while (remainingTime > 0f)
+            {
+                remainingTime -= Time.deltaTime;
+                UpdateScore();
+                yield return null;
+            }
+
+            remainingTime = 0f;
+            UpdateScore();
+            EndSession();
+        }
+
+        private void EndSession()
+        {
+            sessionActive = false;
+            SetButtonsInteractable(false);
+
+            if (autoAdvanceRoutine != null)
+            {
+                StopCoroutine(autoAdvanceRoutine);
+                autoAdvanceRoutine = null;
+            }
+
+            UpdateFeedback($"Time's up! Score: {correctAnswers}/{totalQuestions}");
         }
 
         private void SetButtonsInteractable(bool interactable)
@@ -210,7 +295,7 @@ namespace AbsolutePitchGame
                 return;
             }
 
-            scoreText.text = $"SCORE: {score}";
+            scoreText.text = $"SCORE: {correctAnswers}/{totalQuestions}  TIME: {Mathf.CeilToInt(Mathf.Max(remainingTime, 0f))}s";
         }
     }
 }

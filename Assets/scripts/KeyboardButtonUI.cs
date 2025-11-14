@@ -70,6 +70,7 @@ namespace AbsolutePitchGame
 
         private void NotifyGameManager()
         {
+            Debug.Log($"KeyboardButtonUI.NotifyGameManager noteIndex={noteIndex}, gameManager={(gameManager==null?"null":"ok")}");
             gameManager?.SubmitAnswer(noteIndex);
         }
     }

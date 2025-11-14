@@ -38,6 +38,16 @@ namespace AbsolutePitchGame
             noteSource.Play();
         }
 
+        public void StopNotePlayback()
+        {
+            if (noteSource == null)
+            {
+                return;
+            }
+
+            noteSource.Stop();
+        }
+
         public void PlaySfx(AudioClip clip)
         {
             if (clip == null)
